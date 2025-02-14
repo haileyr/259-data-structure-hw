@@ -39,6 +39,13 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_joined_orig <- full_join(rs_new, rs_old, by = c("Artist", "Song"))
+
+nrow(rs_joined_orig)
+
+View(rs_joined_orig)
+
+# I think the issue is due to inconsistencies in the data formatting (e.g., 'Rolling Stones' vs. 'The Rolling Stones')
 
 
 ### Question 2 ---------- 
@@ -51,6 +58,16 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_new <- rs_new %>% mutate(Source = "New")
+rs_old <- rs_old %>% mutate(Source = "Old")
+
+rs_old <- rs_old %>%
+  mutate(Rank = as.integer(Rank),
+         Year = as.integer(Year))
+
+rs_all <- bind_rows(rs_new, rs_old)
+view(rs_all)
+
 
 ### Question 3 ----------
 
@@ -62,6 +79,20 @@ load("rs_data.RData")
 # Use both functions to make all artists/song lowercase and remove any extra spaces
 
 #ANSWER
+
+rs_all <- rs_all %>% 
+  mutate(
+    Artist = str_remove_all(Artist, "The"),
+    Song = str_remove_all(Song, "The"),
+    Artist = str_replace_all(Artist, "&", "and"),
+    Song = str_replace_all(Song, "&", "and"),
+    Artist = str_remove_all(Artist, "[:punct:]"),
+    Song = str_remove_all(Song, "[:punct:]"),
+    Artist = str_to_lower(Artist, local = "en"),
+    Song = str_to_lower(Song, local = "en"),
+    Artist = str_trim(Artist, side = c("both", "left", "right")),
+    Song = str_trim(Song, side = c("both", "left", "right"))
+  )
 
 
 ### Question 4 ----------
@@ -76,6 +107,17 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_new_cleaned <- rs_all %>%
+  filter(Source == "New")
+
+rs_old_cleaned <- rs_all %>%
+  filter(Source == "Old")
+
+rs_joined <- full_join(rs_new_cleaned, rs_old_cleaned, by = c("Artist", "Song"), suffix = c("_New", "_Old"))
+
+nrow(rs_joined)
+view(rs_joined)
+
 
 ### Question 5 ----------
 
@@ -89,6 +131,15 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_joined <- rs_joined %>% select(-Source_Old, -Source_New)
+
+rs_joined <- rs_joined %>% filter(!is.na(Rank_New) & !is.na(Rank_Old))
+
+rs_joined <- rs_joined %>%
+  mutate(Rank_Change = Rank_Old - Rank_New)
+
+rs_joined <- rs_joined %>% arrange(Rank_Change)
+View(rs_joined)
 
 ### Question 6 ----------
 
@@ -100,6 +151,17 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_joined %>%
+  mutate(Year_New = as.numeric(Year_New),
+         Year_Old = as.numeric(Year_Old)) %>%
+  mutate(Decade = factor(floor(pmax(Year_Old, Year_New) / 10) * 10, 
+                         levels = seq(1900, 2020, by = 10), 
+                         labels = paste0(seq(1900, 2020, by = 10), "s"))) %>%
+  group_by(Decade) %>%
+  summarize(mean_rank_change = mean(Rank_Change, na.rm = TRUE)) %>%
+  View()
+
+# the 90s
 
 
 ### Question 7 ----------
@@ -111,6 +173,22 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_joined %>%
+  mutate(Decade = factor(floor(pmax(Year_Old, Year_New) / 10) * 10, 
+                         levels = seq(1900, 2020, by = 10), 
+                         labels = paste0(seq(1900, 2020, by = 10), "s"))) %>%
+  pull(Decade) %>%  
+  fct_count() %>% 
+  print()
+
+rs_joined %>%
+  mutate(Decade = factor(floor(pmax(Year_Old, Year_New) / 10) * 10, 
+                         levels = seq(1900, 2020, by = 10), 
+                         labels = paste0(seq(1900, 2020, by = 10), "s"))) %>%
+  mutate(Decade = fct_lump(Decade, n = 3)) %>%  
+  pull(Decade) %>% 
+  fct_count(prop = TRUE) %>%
+  print()
 
 
 ### Question 8 ---------- 
@@ -119,7 +197,11 @@ load("rs_data.RData")
 # Release_Date isn't read in correctly as a date
 # Use parse_date_time to fix it
 
-#ANSWER
+top20 <- read_csv("top_20.csv")
+
+top20 <- top20 %>%
+  mutate(Release = parse_date_time(Release, orders = c("mdy", "ymd", "dmy")))
+print(top20)
 
 
 ### Question 9 --------
@@ -130,7 +212,10 @@ load("rs_data.RData")
 
 #ANSWER
 
+top20 <- top20 %>%
+  pivot_wider(names_from = Style, values_from = Value)
 
+print(top20)
 
 ### Question 10 ---------
 
@@ -144,6 +229,27 @@ load("rs_data.RData")
 
 #ANSWER
 
+top20 <- top20 %>%
+  left_join(rs_joined, by = c("Artist", "Song"))
+
+top20 <- top20 %>%
+  mutate(release_month = month(Release, label = TRUE, abbr = FALSE))
+
+top20 <- top20 %>%
+  mutate(season = case_when(
+    release_month %in% c("December", "January", "February") ~ "Winter",
+    release_month %in% c("March", "April", "May") ~ "Spring",
+    release_month %in% c("June", "July", "August") ~ "Summer",
+    release_month %in% c("September", "October", "November") ~ "Fall"
+  ))
+
+top20 <- top20 %>%
+  mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
+
+season_count <- top20 %>%
+  count(season)
+
+print(season_count)
 
 
 ### Question 11 ---------
@@ -155,5 +261,19 @@ load("rs_data.RData")
 
 #ANSWER
 
+top20 <- top20 %>%
+  mutate(Quality = ifelse(grepl("m", Key), "Minor", "Major"))
 
+qual_count <- top20 %>%
+  count(Quality)
+
+top_minor_song <- top20 %>% 
+  filter(Quality == "Minor") %>%
+  arrange(Rank_New.x) %>%
+  slice(1)
+
+print(qual_count)
+print(top_minor_song)
+
+head(top20)
 

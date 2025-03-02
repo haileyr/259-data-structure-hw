@@ -1,5 +1,5 @@
 #PSYC 259 Homework 3 - Data Structure
-#For full credit, provide answers for at least 8/11 questions
+#For full credit, provide answers for at least 8/11 questions (11/11)
 
 #List names of students collaborating with: 
 
@@ -251,6 +251,12 @@ season_count <- top20 %>%
 
 print(season_count)
 
+#Mcomment: Looks good - another option was to use fct_collapse, so you didn't need to edit seasons twice
+top20 <- top20 %>% mutate(Season = fct_collapse(Release_Month,
+                                                Winter = c("Dec", "Jan","Feb"),
+                                                Spring = c("Mar","Apr","May"),
+                                                Summer = c("Jun", "Jul","Aug"),
+                                                Fall = c("Sep", "Oct", "Nov")))
 
 ### Question 11 ---------
 
